@@ -1,0 +1,25 @@
+site,flare_variable,vera_variable,conversion,in_flare,variable_type,n_depths,depth_range,n_members,horizon_days,mean_pred,prop_na,n_obs,first_obs,last_obs,n_obs_depths,obs_depths,has_targets,usable
+bvre,Chla_ugL_mean,Chla_ugL_mean,none (>20 ugL at 1.6m = Bloom_binary_mean),TRUE,state,24,0 - 13,221,35,3.905602203122506,8.903133903133904e-5,2152,2020-06-25,2026-08-11,1,1.5,TRUE,TRUE
+bvre,CAR_dic,DIC_mgL_sample,/1000/(1/52.515),TRUE,state,24,0 - 13,221,35,226.60675584427267,8.903133903133904e-5,758,2018-05-04,2024-12-03,13,"0.1, 1.5, 1.6, 3, 5, 6, 7, 7.5, 8, 9, 10, 10.5, 11",TRUE,TRUE
+bvre,DO_mgL_mean,DO_mgL_mean,already converted by FLARE,TRUE,state,24,0 - 13,221,35,136.60739728851487,8.903133903133904e-5,6619,2020-06-19,2026-08-11,4,"1.5, 6, 8, 13",TRUE,TRUE
+bvre,NIT_amm,NH4_ugL_sample,/1000/0.001/(1/18.04),TRUE,state,24,0 - 13,221,35,0.768933277484524,8.903133903133904e-5,1169,2014-04-04,2024-12-03,15,"0.1, 1.5, 1.6, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 10.5, 11, 12",TRUE,TRUE
+bvre,NIT_nit,NO3NO2_ugL_sample,/1000/0.001/(1/62.00),TRUE,state,24,0 - 13,221,35,0.015047488019860347,8.903133903133904e-5,1167,2014-04-04,2024-12-03,15,"0.1, 1.5, 1.6, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 10.5, 11, 12",TRUE,TRUE
+bvre,PHS_frp,SRP_ugL_sample,/1000/0.001/(1/94.9714),TRUE,state,24,0 - 13,221,35,1.0707733979278797,8.903133903133904e-5,1161,2014-04-04,2024-12-03,15,"0.1, 1.5, 1.6, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 10.5, 11, 12",TRUE,TRUE
+bvre,secchi,Secchi_m_sample,none (derived from extc),TRUE,state,0,no depth (whole-lake / surface),221,35,1.1010206841640167,0.027777777777777776,297,2013-08-30,2026-08-10,1,,TRUE,TRUE
+bvre,fDOM_QSU_mean,fDOM_QSU_mean,(151.3407 + prediction)/29.62654,TRUE,state,24,0 - 13,221,35,18.91610532893994,8.903133903133904e-5,2152,2020-06-25,2026-08-11,1,1.5,TRUE,TRUE
+bvre,CAR_ch4,CH4_umolL_sample,none,FALSE,NA,NA,NA,NA,NA,NA,NA,1083,2015-07-09,2026-04-27,13,"0.1, 1, 1.6, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11",TRUE,FALSE
+bvre,ch4_flux_mean,CH4flux_umolm2s_mean,/0.001/86400,FALSE,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,FALSE
+bvre,co2_flux_mean,CO2flux_umolm2s_mean,/0.001/86400,FALSE,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,FALSE,FALSE
+bvre,oxy_mean,DO_mgL_mean,"/1000*32, forced to depth 1.6, datetime - 1 day",FALSE,NA,NA,NA,NA,NA,NA,NA,6619,2020-06-19,2026-08-11,4,"1.5, 6, 8, 13",TRUE,FALSE
+fcre,CAR_ch4,CH4_umolL_sample,none,TRUE,state,11,0 - 9,221,35,5.5874988447904546,0,2643,2015-03-31,2026-04-27,9,"0.1, 1.6, 3.2, 3.8, 5, 6, 6.2, 8, 9",TRUE,TRUE
+fcre,ch4_flux_mean,CH4flux_umolm2s_mean,/0.001/86400,TRUE,diagnostic,0,no depth (whole-lake / surface),221,35,0.7307723678214089,0.027777777777777776,1889,2020-04-04,2026-07-29,1,,TRUE,TRUE
+fcre,co2_flux_mean,CO2flux_umolm2s_mean,/0.001/86400,TRUE,diagnostic,0,no depth (whole-lake / surface),221,35,1.298981304942027,0.027777777777777776,1792,2020-04-04,2026-07-29,1,,TRUE,TRUE
+fcre,Chla_ugL_mean,Chla_ugL_mean,none (>20 ugL at 1.6m = Bloom_binary_mean),TRUE,state,11,0 - 9,221,35,12.194240870484109,0,2874,2018-08-06,2026-08-11,1,1.6,TRUE,TRUE
+fcre,CAR_dic,DIC_mgL_sample,/1000/(1/52.515),TRUE,state,11,0 - 9,221,35,82.52857730591533,0,1730,2018-01-15,2025-01-27,10,"0.1, 1.6, 3.8, 4.5, 5, 6.2, 8, 9, 9.5, 10",TRUE,TRUE
+fcre,oxy_mean,DO_mgL_mean,"/1000*32, forced to depth 1.6, datetime - 1 day",TRUE,diagnostic,0,no depth (whole-lake / surface),221,35,176.32835239088354,0.027777777777777776,8688,2018-07-06,2026-08-11,3,"1.6, 5, 9",TRUE,TRUE
+fcre,DO_mgL_mean,DO_mgL_mean,already converted by FLARE,TRUE,state,11,0 - 9,221,35,92.81562442795314,0,8688,2018-07-06,2026-08-11,3,"1.6, 5, 9",TRUE,TRUE
+fcre,NIT_amm,NH4_ugL_sample,/1000/0.001/(1/18.04),TRUE,state,11,0 - 9,221,35,17.896463145773467,0,3050,2013-06-27,2025-01-27,16,"0.1, 0.8, 1.6, 2.8, 3.8, 4.5, 5, 5.2, 5.5, 5.8, 6, 6.2, 8, 9, 9.5, 10",TRUE,TRUE
+fcre,NIT_nit,NO3NO2_ugL_sample,/1000/0.001/(1/62.00),TRUE,state,11,0 - 9,221,35,0.3715594099034587,0,3039,2013-06-27,2025-01-27,16,"0.1, 0.8, 1.6, 2.8, 3.8, 4.5, 5, 5.2, 5.5, 5.8, 6, 6.2, 8, 9, 9.5, 10",TRUE,TRUE
+fcre,PHS_frp,SRP_ugL_sample,/1000/0.001/(1/94.9714),TRUE,state,11,0 - 9,221,35,0.049446024356745576,0,3044,2013-06-27,2025-01-27,16,"0.1, 0.8, 1.6, 2.8, 3.8, 4.5, 5, 5.2, 5.5, 5.8, 6, 6.2, 8, 9, 9.5, 10",TRUE,TRUE
+fcre,secchi,Secchi_m_sample,none (derived from extc),TRUE,state,0,no depth (whole-lake / surface),221,35,1.3362363571274258,0.027777777777777776,434,2013-10-16,2026-08-10,1,,TRUE,TRUE
+fcre,fDOM_QSU_mean,fDOM_QSU_mean,(151.3407 + prediction)/29.62654,TRUE,state,11,0 - 9,221,35,280.3886110090106,0,2865,2018-08-06,2026-08-11,1,1.6,TRUE,TRUE

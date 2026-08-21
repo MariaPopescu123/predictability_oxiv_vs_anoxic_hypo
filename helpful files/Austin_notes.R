@@ -5,8 +5,6 @@
 
 #bio230121-bucket01/flare/scores/parquet/site_id=fcre/model_id=glm_aed_flare_v3/ 
 
-#updates from your conversation with Cayelan
-
 #variables available from targets vs. variables available from FLARE 
 #new version?
 

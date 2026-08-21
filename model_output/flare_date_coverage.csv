@@ -1,0 +1,4 @@
+site,run,n_dates,first_ref,last_ref,missing_days
+fcre,glm_aed_flare_v3 (operational),688,2024-09-25,2026-08-17,4
+bvre,glm_aed_flare_v3 (operational),447,2025-04-25,2026-08-17,33
+fcre,glm_aed_flare_v3_reforecast,170,2024-05-01,2024-10-17,0
