@@ -74,8 +74,13 @@ for (i in sites){
   
   ## validate and submit forecast (uncomment when ready to submit)
   # print('Validating File...')
+  ## validator only reads the local CSV - safe, left live
   vera4castHelpers::forecast_output_validator(forecast_file_abs_path)
-  vera4castHelpers::submit(forecast_file_abs_path, s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)
+
+  ## WRITES TO BUCKET - deliberately disabled. submit() uploads this forecast to
+  ## the VERA submissions bucket. Uncomment ONLY when you actually intend to
+  ## submit a forecast to the challenge.
+  # vera4castHelpers::submit(forecast_file_abs_path, s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)
   
 } # end loop
 

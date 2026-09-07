@@ -222,11 +222,14 @@ while(noaa_ready & inflow_ready){
   
   targets_df <- read_csv(file.path(config$file_path$qaqc_data_directory,paste0(config$location$site_id, "-targets-insitu.csv")),show_col_types = FALSE)
   
+  ## WRITES TO BUCKET if use_s3 is TRUE - forced to FALSE so scores go only to
+  ## the local_directory below. Restore the original three lines only if you
+  ## intend to publish scores to the FLARE scores bucket.
   scoring <- generate_forecast_score_arrow(targets_df = targets_df,
                                            forecast_df = combined_forecasts, ## only works if dataframe returned from output
-                                           use_s3 = config$run_config$use_s3,
-                                           bucket = config$s3$scores$bucket,
-                                           endpoint = config$s3$scores$endpoint,
+                                           use_s3 = FALSE,   # was: config$run_config$use_s3
+                                           # bucket = config$s3$scores$bucket,
+                                           # endpoint = config$s3$scores$endpoint,
                                            local_directory = './scores/fcre',
                                            variable_types = c("state","parameter"))
   
@@ -245,16 +248,21 @@ while(noaa_ready & inflow_ready){
                             site_id = config$location$site_id,
                             configure_flare = config$run_config$configure_flare,
                             configure_obs = config$run_config$configure_obs,
-                            use_s3 = config$run_config$use_s3,
-                            bucket = config$s3$restart$bucket,
-                            endpoint = config$s3$restart$endpoint,
+                            ## WRITES TO BUCKET if use_s3 is TRUE - forced FALSE
+                            ## so the restart file stays local.
+                            use_s3 = FALSE,   # was: config$run_config$use_s3
+                            # bucket = config$s3$restart$bucket,
+                            # endpoint = config$s3$restart$endpoint,
                             use_https = TRUE)
   
   var1 <- Sys.getenv("AWS_ACCESS_KEY_ID")
   var2 <- Sys.getenv("AWS_SECRET_ACCESS_KEY")
   Sys.unsetenv("AWS_ACCESS_KEY_ID")
   Sys.unsetenv("AWS_SECRET_ACCESS_KEY")
-  vera4castHelpers::submit(file_name, first_submission = FALSE)
+  ## WRITES TO BUCKET - deliberately disabled. submit() uploads the forecast to
+  ## the VERA submissions bucket. Uncomment ONLY when you actually intend to
+  ## submit a forecast to the challenge.
+  # vera4castHelpers::submit(file_name, first_submission = FALSE)
   
   RCurl::url.exists("https://hc-ping.com/3de1338c-ee1f-4327-b547-d4c582929d6e", timeout = 5)
   

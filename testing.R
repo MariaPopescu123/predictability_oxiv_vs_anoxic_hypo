@@ -1,26 +1,20 @@
 #### what chem variables can I actually get out of FLARE? ####
 ## MP: August 2026
-## pulls the variable list out of the FLARE glm_aed output for fcre (Falling
-## Creek Reservoir) and bvre (Beaverdam Reservoir) and summarizes what is
-## available for the chem variables.
+## Pulls the chem variables out of the FLARE glm_aed output for fcre (Falling
+## Creek Reservoir) and bvre (Beaverdam Reservoir), summarizes the forecast
+## structure (depths, ensemble size, horizon), and lines that up against the VERA
+## targets to see what is actually scoreable.
 ##
 ## EVERYTHING here is site 50 (the deep hole / catwalk station) in both
 ## reservoirs - see the "#### 0. site 50" block for why.
 ##
 ## NOTES FROM WHERE CODE IS COMING FROM (cited again inline):
-##  - s3_bucket + endpoint + the fcre parquet paths:
-##      "helpful files/exploring_chem.R" lines 83-91 and 104-111
-##  - AED name -> VERA name/unit conversions:
-##      "helpful files/forecasting_conversion_notes.R" lines 134-161
-##      (Austin's combined_run_aed.R, URL on that file's line 3)
-##  - the VERA target list to check the conversions against:
-##      "helpful files/forecasting_conversion_notes.R" lines 74-77
-##  - daily-insitu targets URL:
-##      "helpful files/exploring_chem.R" lines 6 and 40
-##  - n_members = 150:
-##      "helpful files/exploring_chem.R" line 37
-##  - horizon == 0 "nowcast" trick (reference_datetime == datetime):
-##      "helpful files/exploring_chem.R" lines 219-221
+##   s3 paths + OSN endpoint      "helpful files/exploring_chem.R" lines 83-91, 104-111
+##   AED -> VERA conversions      "helpful files/forecasting_conversion_notes.R" lines 134-161
+##   VERA target name spellings   "helpful files/forecasting_conversion_notes.R" lines 74-77
+##   daily-insitu targets URL     "helpful files/exploring_chem.R" lines 6, 40
+##   n_members = 150              "helpful files/exploring_chem.R" line 37
+##   horizon == 0 nowcast trick   "helpful files/exploring_chem.R" lines 219-221
 ##
 ## note: don't aggregate over the whole dataset, it is enormous and all over the
 ## network. the buckets are partitioned by reference_date, so the date list comes
@@ -31,16 +25,13 @@ library(tidyverse)
 library(arrow)
 
 out_dir <- "./model_output"
-osn <- "amnh1.osn.mghpcc.org"   # OSN endpoint, same as "helpful files/exploring_chem.R" line 84
-
-sites <- c("fcre", "bvre")      # used to filter the targets file later
+osn     <- "amnh1.osn.mghpcc.org"   # OSN endpoint, "helpful files/exploring_chem.R" line 84
+sites   <- c("fcre", "bvre")
 
 
 #### 0. site 50 ####
 # FORECAST SIDE: FLARE/GLM-AED is a 1-D model of the deep hole. The bucket is
-# partitioned by site_id (fcre / bvre) only - there is no Site column, because a
-# FLARE run IS the site-50 water column. The depth check in section 6b confirms
-# the profile actually reaches the deep-hole depth.
+# partitioned by site_id (fcre / bvre) only
 #
 # OBSERVATION SIDE: the VERA targets file has site_id but no Site column,
 # because Site==50 is filtered upstream. Lines in LTREB-reservoirs/vera4cast,
@@ -52,15 +43,12 @@ sites <- c("fcre", "bvre")      # used to filter the targets file later
 #   target_generation_exo_daily.R        lines 24-38  no Site filter needed, the inputs
 #                                        ARE the site-50 platforms (FCR catwalk EDI 271,
 #                                        BVR platform EDI 725) -> DO, Chla, fDOM
-#   EXCEPTION: generate_EddyFlux_ghg_targets_function.R line 208 sets Reservoir='fcre'
-#   with NO Site filter. CO2flux / CH4flux are eddy-covariance tower fluxes over a
-#   wind footprint = whole reservoir, not site 50. Dropped below.
-site50_only <- TRUE
+# The one FLARE output whose observations are NOT site 50 is the eddy-flux pair;
+# it is left out of the lookup table in section 5, see the comment there.
 
 # max depth at site 50, from the VERA site table
 # https://raw.githubusercontent.com/LTREB-reservoirs/vera4cast/main/vera4cast_field_site_metadata.csv
-fcre_max_depth <- 9.3    # Falling Creek
-bvre_max_depth <- 13.4   # Beaverdam
+site50_max_depth <- c(fcre = 9.3, bvre = 13.4)
 
 
 #### 1. the buckets ####
@@ -68,17 +56,19 @@ bvre_max_depth <- 13.4   # Beaverdam
 # sunp, TOOK, SUGG) is glm_flare_v1/v3 - physics only, no chemistry.
 # paths and arguments copied from "helpful files/exploring_chem.R" lines 83-91.
 
-fcre_path <- "bio230121-bucket01/flare/forecasts/parquet/site_id=fcre/model_id=glm_aed_flare_v3"
-bvre_path <- "bio230121-bucket01/flare/forecasts/parquet/site_id=bvre/model_id=glm_aed_flare_v3"
+open_osn <- function(path) arrow::s3_bucket(path, endpoint_override = osn, anonymous = TRUE)
+
+flare_path <- c(
+  fcre = "bio230121-bucket01/flare/forecasts/parquet/site_id=fcre/model_id=glm_aed_flare_v3",
+  bvre = "bio230121-bucket01/flare/forecasts/parquet/site_id=bvre/model_id=glm_aed_flare_v3")
 
 # the reforecast is a retrospective rerun of the SAME model (the glm3.nml /
 # aed2.nml / states_config files are identical to the operational run) - it just
 # backfills May-Oct 2024. fcre only, there is no bvre reforecast.
-fcre_reforecast_path <- "bio230121-bucket01/fcre-reforecast/forecasts/parquet/site_id=fcre/model_id=glm_aed_flare_v3_reforecast"
+reforecast_path <- "bio230121-bucket01/fcre-reforecast/forecasts/parquet/site_id=fcre/model_id=glm_aed_flare_v3_reforecast"
 
-fcre_bucket <- arrow::s3_bucket(fcre_path, endpoint_override = osn, anonymous = TRUE)
-bvre_bucket <- arrow::s3_bucket(bvre_path, endpoint_override = osn, anonymous = TRUE)
-fcre_reforecast_bucket <- arrow::s3_bucket(fcre_reforecast_path, endpoint_override = osn, anonymous = TRUE)
+flare_bucket      <- map(flare_path, open_osn)   # named list: $fcre, $bvre
+reforecast_bucket <- open_osn(reforecast_path)
 
 
 #### 2. what reference dates exist ####
@@ -86,26 +76,25 @@ fcre_reforecast_bucket <- arrow::s3_bucket(fcre_reforecast_path, endpoint_overri
 # prefix, ymd() makes them real dates, sort() puts them in order.
 # the strip-the-prefix idiom is Austin's, "helpful files/forecasting_conversion_notes.R" line 35.
 
-fcre_dates <- fcre_bucket$ls() |> str_remove("reference_date=") |> ymd() |> sort()
-bvre_dates <- bvre_bucket$ls() |> str_remove("reference_date=") |> ymd() |> sort()
-fcre_reforecast_dates <- fcre_reforecast_bucket$ls() |> str_remove("reference_date=") |> ymd() |> sort()
+list_ref_dates <- function(bucket) bucket$ls() |> str_remove("reference_date=") |> ymd() |> sort()
+
+ref_dates        <- map(flare_bucket, list_ref_dates)
+reforecast_dates <- list_ref_dates(reforecast_bucket)
 
 # one row per run: how many forecasts, over what window, and how many days inside
 # that window have no forecast at all (setdiff of the full daily sequence vs what is there)
+describe_dates <- function(dates, site, run){
+  tibble(site = site, run = run,
+         n_dates      = length(dates),
+         first_ref    = min(dates),
+         last_ref     = max(dates),
+         missing_days = length(setdiff(seq(min(dates), max(dates), by = "day"), dates)))
+}
+
 coverage <- bind_rows(
-  tibble(site = "fcre", run = "glm_aed_flare_v3 (operational)",
-         n_dates = length(fcre_dates),
-         first_ref = min(fcre_dates), last_ref = max(fcre_dates),
-         missing_days = length(setdiff(seq(min(fcre_dates), max(fcre_dates), by = "day"), fcre_dates))),
-  tibble(site = "bvre", run = "glm_aed_flare_v3 (operational)",
-         n_dates = length(bvre_dates),
-         first_ref = min(bvre_dates), last_ref = max(bvre_dates),
-         missing_days = length(setdiff(seq(min(bvre_dates), max(bvre_dates), by = "day"), bvre_dates))),
-  tibble(site = "fcre", run = "glm_aed_flare_v3_reforecast",
-         n_dates = length(fcre_reforecast_dates),
-         first_ref = min(fcre_reforecast_dates), last_ref = max(fcre_reforecast_dates),
-         missing_days = length(setdiff(seq(min(fcre_reforecast_dates), max(fcre_reforecast_dates), by = "day"),
-                                       fcre_reforecast_dates))))
+  describe_dates(ref_dates$fcre,   "fcre", "glm_aed_flare_v3 (operational)"),
+  describe_dates(ref_dates$bvre,   "bvre", "glm_aed_flare_v3 (operational)"),
+  describe_dates(reforecast_dates, "fcre", "glm_aed_flare_v3_reforecast"))
 
 message("reference date coverage:")
 print(coverage)
@@ -115,135 +104,120 @@ print(coverage)
 # reforecast is only ever allowed to contribute the dates the operational never
 # covered. pull_chem() uses this vector so those 23 days can't come back twice.
 # setdiff() strips the Date class, hence as_date().
-fcre_reforecast_only_dates <- as_date(setdiff(fcre_reforecast_dates, fcre_dates))
+reforecast_only_dates <- as_date(setdiff(reforecast_dates, ref_dates$fcre))
 
 message("fcre operational / reforecast overlap: ",
-        length(intersect(fcre_dates, fcre_reforecast_dates)), " reference dates (reforecast dropped for these)")
-message("reforecast contributes ", length(fcre_reforecast_only_dates),
-        " extra dates: ", min(fcre_reforecast_only_dates), " to ", max(fcre_reforecast_only_dates))
+        length(intersect(ref_dates$fcre, reforecast_dates)), " reference dates (reforecast dropped for these)")
+message("reforecast contributes ", length(reforecast_only_dates),
+        " extra dates: ", min(reforecast_only_dates), " to ", max(reforecast_only_dates))
 
 
 #### 3. what variables come out at each reservoir ####
 # one reference_date folder is enough, the variable set doesn't change day to day.
 # open_dataset on a single partition = small, fast pull.
+# distinct() runs on the server, collect() brings back only the short result.
 
-fcre_latest <- max(fcre_dates)
-bvre_latest <- max(bvre_dates)
+latest_ds <- imap(flare_path, \(path, site)
+  open_dataset(open_osn(paste0(path, "/reference_date=", max(ref_dates[[site]])))))
 
-fcre_ds <- arrow::s3_bucket(paste0(fcre_path, "/reference_date=", fcre_latest),
-                            endpoint_override = osn, anonymous = TRUE) |> arrow::open_dataset()
-bvre_ds <- arrow::s3_bucket(paste0(bvre_path, "/reference_date=", bvre_latest),
-                            endpoint_override = osn, anonymous = TRUE) |> arrow::open_dataset()
+flare_vars <- map(latest_ds, \(ds) ds |> distinct(variable) |> collect() |> pull(variable) |> sort())
 
-# distinct() runs on the server, collect() brings back only the short result
-fcre_vars <- fcre_ds |> distinct(variable) |> collect() |> pull(variable) |> sort()
-bvre_vars <- bvre_ds |> distinct(variable) |> collect() |> pull(variable) |> sort()
-
-message("fcre (Falling Creek): ", length(fcre_vars), " variables")
-print(fcre_vars)
-message("bvre (Beaverdam): ", length(bvre_vars), " variables")
-print(bvre_vars)
+message("fcre (Falling Creek): ", length(flare_vars$fcre), " variables")
+print(flare_vars$fcre)
+message("bvre (Beaverdam): ", length(flare_vars$bvre), " variables")
+print(flare_vars$bvre)
 
 message("in both reservoirs:")
-print(intersect(fcre_vars, bvre_vars))
+print(intersect(flare_vars$fcre, flare_vars$bvre))
 message("Falling Creek only (the OGM organic matter pool, CAR_ch4, oxy_mean, surface fluxes):")
-print(setdiff(fcre_vars, bvre_vars))
+print(setdiff(flare_vars$fcre, flare_vars$bvre))
 message("Beaverdam only (the ZOO groups and the PHY internal N/P stores):")
-print(setdiff(bvre_vars, fcre_vars))
+print(setdiff(flare_vars$bvre, flare_vars$fcre))
 
 
 #### 4. which of those are chem ####
-# AED module prefixes: OXY, NIT (N), PHS (P), CAR (C/DIC/CH4), OGM (organic
-# matter), SIL (Si), PHY (phyto), ZOO (zooplankton), plus the chem variables
-# FLARE already names itself. those already-named ones are exactly the names
-# Austin converts in "helpful files/forecasting_conversion_notes.R" lines 137-159.
-chem_pattern <- paste0("^(OXY|NIT|PHS|CAR|OGM|SIL|PHY|ZOO|TRC|NCS)_",
-                       "|^(oxy|chla|fdom|secchi|extc)|_flux_|^DO_|^Chla|^fDOM|Rdom")
+# two rules: an AED module prefix, or one of the chem variables FLARE already
+# names itself. that second list is exactly the set Austin converts in
+# "helpful files/forecasting_conversion_notes.R" lines 137-159, plus the two
+# FLARE reports without a VERA name (extc, Rdom_minerl).
+aed_modules <- c("OXY", "NIT", "PHS", "CAR", "OGM", "SIL", "PHY", "ZOO", "TRC", "NCS")
 
-fcre_chem <- fcre_vars[str_detect(fcre_vars, regex(chem_pattern, ignore_case = TRUE))]
-bvre_chem <- bvre_vars[str_detect(bvre_vars, regex(chem_pattern, ignore_case = TRUE))]
+flare_named_chem <- c("oxy_mean", "DO_mgL_mean", "Chla_ugL_mean", "fDOM_QSU_mean",
+                      "secchi", "extc", "Rdom_minerl", "co2_flux_mean", "ch4_flux_mean")
 
-message("fcre (Falling Creek): ", length(fcre_chem), " chem variables")
-print(fcre_chem)
-message("bvre (Beaverdam): ", length(bvre_chem), " chem variables")
-print(bvre_chem)
+is_chem <- function(v){
+  str_detect(v, paste0("^(", paste(aed_modules, collapse = "|"), ")_")) | v %in% flare_named_chem
+}
 
-# what the regex did NOT catch at fcre - should be temp/ice/mixing state and
+chem_vars <- map(flare_vars, \(v) v[is_chem(v)])
+
+message("fcre (Falling Creek): ", length(chem_vars$fcre), " chem variables")
+print(chem_vars$fcre)
+message("bvre (Beaverdam): ", length(chem_vars$bvre), " chem variables")
+print(chem_vars$bvre)
+
+# what the rules did NOT catch at fcre - should be temp/ice/mixing state and
 # calibrated parameters. a check that no chem is being dropped.
 message("non-chem (physics / state / calibrated parameters), fcre:")
-print(setdiff(fcre_vars, fcre_chem))
+print(setdiff(flare_vars$fcre, chem_vars$fcre))
 
 
 #### 5. AED -> VERA lookup ####
 # every row is a transcription of a line in "helpful files/forecasting_conversion_notes.R":
 #   oxy_mean      -> DO_mgL_mean          lines 137-140
 #   NIT_amm       -> NH4_ugL_sample       lines 146-147
-#   NIT_nit       -> NO3NO2_ugL_sample    line 148 (+ line 149, the buggy rename, see NOTE)
-#   PHS_frp       -> SRP_ugL_sample       lines 150-151
-#   CAR_dic       -> DIC_mgL_sample       lines 152-153
-#   CAR_ch4       -> CH4_umolL_sample     line 154
-#   fDOM_QSU_mean                         line 145
-#   Chla_ugL_mean -> Bloom_binary_mean    lines 80-83 (>20 ugL at 1.6 m)
-#   secchi        -> Secchi_m_sample      line 155
-#   co2_flux_mean -> CO2flux_umolm2s_mean lines 156-157
-#   ch4_flux_mean -> CH4flux_umolm2s_mean lines 158-159
+#   ... (see that file for the rest)
 # vera_variable spellings checked against that file's lines 74-77.
-
-# obs_site50 = is the matching VERA observation a site-50 sample (see section 0)
+#
+# DELIBERATELY NOT IN THIS TABLE: co2_flux_mean / ch4_flux_mean. FLARE produces
+# them at fcre and VERA does have targets (CO2flux_umolm2s_mean and
+# CH4flux_umolm2s_mean, both /0.001/86400, lines 156-159), but the observations
+# are eddy-covariance tower fluxes over a wind footprint - the whole reservoir,
+# not site 50. generate_EddyFlux_ghg_targets_function.R line 208 sets
+# Reservoir='fcre' with no Site filter. Scoring a whole-reservoir flux against a
+# 1-D site-50 water column would not be a like-for-like comparison, and surface
+# GHG flux is not part of the hypolimnion question anyway. Everything left in
+# this table pairs a site-50 forecast with a site-50 observation.
 chem_lookup <- tribble(
-  ~flare_variable,  ~vera_variable,          ~conversion,                                        ~obs_source,                              ~obs_site50,
-  "oxy_mean",       "DO_mgL_mean",           "/1000*32, forced to depth 1.6, datetime - 1 day",  "exo_daily (catwalk EDI 271/725)",        TRUE,
-  "DO_mgL_mean",    "DO_mgL_mean",           "already converted by FLARE",                       "exo_daily (catwalk EDI 271/725)",        TRUE,
-  "NIT_amm",        "NH4_ugL_sample",        "/1000/0.001/(1/18.04)",                            "chemistry_daily (Site==50)",             TRUE,
-  "NIT_nit",        "NO3NO2_ugL_sample",     "/1000/0.001/(1/62.00)",                            "chemistry_daily (Site==50)",             TRUE,
-  "PHS_frp",        "SRP_ugL_sample",        "/1000/0.001/(1/94.9714)",                          "chemistry_daily (Site==50)",             TRUE,
-  "CAR_dic",        "DIC_mgL_sample",        "/1000/(1/52.515)",                                 "chemistry_daily (Site==50)",             TRUE,
-  "CAR_ch4",        "CH4_umolL_sample",      "none",                                             "ghg_daily (Site==50)",                   TRUE,
-  "fDOM_QSU_mean",  "fDOM_QSU_mean",         "(151.3407 + prediction)/29.62654",                 "exo_daily (catwalk EDI 271/725)",        TRUE,
-  "Chla_ugL_mean",  "Chla_ugL_mean",         "none (>20 ugL at 1.6m = Bloom_binary_mean)",       "exo_daily (catwalk EDI 271/725)",        TRUE,
-  "secchi",         "Secchi_m_sample",       "none (derived from extc)",                         "secchi_daily (Site==\"50\")",            TRUE,
-  "co2_flux_mean",  "CO2flux_umolm2s_mean",  "/0.001/86400",                                     "EddyFlux tower footprint - NOT site 50", FALSE,
-  "ch4_flux_mean",  "CH4flux_umolm2s_mean",  "/0.001/86400",                                     "EddyFlux tower footprint - NOT site 50", FALSE)
+  ~flare_variable,  ~vera_variable,          ~conversion,                                        ~obs_source,
+  "oxy_mean",       "DO_mgL_mean",           "/1000*32, forced to depth 1.6, datetime - 1 day",  "exo_daily (catwalk EDI 271/725)",
+  "DO_mgL_mean",    "DO_mgL_mean",           "already converted by FLARE",                       "exo_daily (catwalk EDI 271/725)",
+  "NIT_amm",        "NH4_ugL_sample",        "/1000/0.001/(1/18.04)",                            "chemistry_daily (Site==50)",
+  "NIT_nit",        "NO3NO2_ugL_sample",     "/1000/0.001/(1/62.00)",                            "chemistry_daily (Site==50)",
+  "PHS_frp",        "SRP_ugL_sample",        "/1000/0.001/(1/94.9714)",                          "chemistry_daily (Site==50)",
+  "CAR_dic",        "DIC_mgL_sample",        "/1000/(1/52.515)",                                 "chemistry_daily (Site==50)",
+  "CAR_ch4",        "CH4_umolL_sample",      "none",                                             "ghg_daily (Site==50)",
+  "fDOM_QSU_mean",  "fDOM_QSU_mean",         "(151.3407 + prediction)/29.62654",                 "exo_daily (catwalk EDI 271/725)",
+  "Chla_ugL_mean",  "Chla_ugL_mean",         "none (>20 ugL at 1.6m = Bloom_binary_mean)",       "exo_daily (catwalk EDI 271/725)",
+  "secchi",         "Secchi_m_sample",       "none (derived from extc)",                         "secchi_daily (Site==\"50\")")
 
 # does FLARE actually produce each variable at each reservoir
 chem_lookup <- chem_lookup |>
-  mutate(in_fcre = flare_variable %in% fcre_vars,
-         in_bvre = flare_variable %in% bvre_vars)
-
-# drop the eddy-flux rows so every forecast/observation pair is a site-50 comparison
-if(site50_only){
-  message("site50_only = TRUE, dropping: ",
-          paste(chem_lookup$vera_variable[!chem_lookup$obs_site50], collapse = ", "))
-  chem_lookup <- chem_lookup |> filter(obs_site50)
-}
+  mutate(in_fcre = flare_variable %in% flare_vars$fcre,
+         in_bvre = flare_variable %in% flare_vars$bvre)
 
 print(chem_lookup, n = Inf)
 
-# chem output with no VERA target to score against (model state only)
-message("no VERA target, fcre:")
-print(setdiff(fcre_chem, chem_lookup$flare_variable))
-message("no VERA target, bvre:")
-print(setdiff(bvre_chem, chem_lookup$flare_variable))
+# chem output this script will not score: model state with no VERA target at all
+# (the OGM / PHY / ZOO / SIL pools, extc, Rdom_minerl) plus the two eddy-flux
+# variables excluded above.
+message("not scored here, fcre:")
+print(setdiff(chem_vars$fcre, chem_lookup$flare_variable))
+message("not scored here, bvre:")
+print(setdiff(chem_vars$bvre, chem_lookup$flare_variable))
 
 
 #### 6. structure of each chem variable ####
-# pull the chem variables from the most recent forecast at each reservoir, tag
-# each with its site, and stack them. one collected dataframe, reused in
-# section 6b and section 10 so the network only gets hit once.
+# pull the chem variables from the most recent forecast at each reservoir and
+# stack them. one collected dataframe, reused in section 6b and section 10 so
+# the network only gets hit once.
 
-fcre_chem_data <- fcre_ds |>
-  filter(variable %in% fcre_chem) |>
-  select(datetime, depth, parameter, variable, prediction, variable_type) |>
-  collect() |>
-  mutate(site = "fcre")
-
-bvre_chem_data <- bvre_ds |>
-  filter(variable %in% bvre_chem) |>
-  select(datetime, depth, parameter, variable, prediction, variable_type) |>
-  collect() |>
-  mutate(site = "bvre")
-
-chem_data <- bind_rows(fcre_chem_data, bvre_chem_data)
+chem_data <- imap(latest_ds, \(ds, site)
+  ds |>
+    filter(variable %in% chem_vars[[site]]) |>
+    select(datetime, depth, parameter, variable, prediction, variable_type) |>
+    collect()) |>
+  bind_rows(.id = "site")
 
 chem_structure <- chem_data |>
   group_by(site, variable) |>
@@ -251,6 +225,7 @@ chem_structure <- chem_data |>
             n_depths      = n_distinct(depth[!is.na(depth)]),                # depth layers in the profile
             depth_range   = if(all(is.na(depth))) "no depth (whole-lake / surface)" else
                               paste0(min(depth, na.rm = TRUE), " - ", max(depth, na.rm = TRUE)),
+            depths        = paste(sort(unique(depth)), collapse = ", "),     # the actual layers, not just the range
             n_members     = n_distinct(parameter),                           # ensemble size
             horizon_days  = as.numeric(difftime(max(datetime), min(datetime), units = "days")),
             mean_pred     = mean(prediction, na.rm = TRUE),                  # magnitude check, raw AED units
@@ -258,12 +233,9 @@ chem_structure <- chem_data |>
             .groups = "drop") |>
   arrange(variable, site)
 
-print(chem_structure, n = Inf)
-
 # depth resolution differs by reservoir - this is what matters for hypo work.
-# Falling Creek 0-9 m (11 layers), Beaverdam 0-13 m (24 layers).
 message("depths available per reservoir:")
-print(chem_structure |> distinct(site, n_depths, depth_range) |> arrange(site, n_depths))
+print(chem_structure |> distinct(site, n_depths, depths) |> arrange(site, n_depths))
 
 
 #### 6b. site 50 depth check ####
@@ -273,25 +245,21 @@ depth_check <- chem_data |>
   filter(!is.na(depth)) |>
   group_by(site) |>
   summarise(deepest_layer = max(depth), .groups = "drop") |>
-  mutate(site50_max_depth = if_else(site == "fcre", fcre_max_depth, bvre_max_depth),
-         is_deep_hole     = deepest_layer >= site50_max_depth - 1.5)  # allow for drawdown
+  mutate(max_depth    = site50_max_depth[site],
+         is_deep_hole = deepest_layer >= max_depth - 1.5)  # allow for drawdown
 
 message("site 50 depth check:")
 print(depth_check)
 
 
 #### 7. how does that line up with the targets ####
-# same URL as "helpful files/exploring_chem.R" lines 6 and 40
-targets_url <- "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
-
+# same URL as "helpful files/exploring_chem.R" lines 6 and 40.
 # site_id is the only site key in this file - fcre = Falling Creek site 50,
 # bvre = Beaverdam site 50, because Site==50 was filtered upstream (section 0).
+targets_url <- "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
+
 targets <- readr::read_csv(targets_url, show_col_types = FALSE) |>
   filter(site_id %in% sites)
-
-# if the targets file ever gains a Site column, filter it rather than silently
-# mixing in the stream / upstream stations
-if("Site" %in% names(targets)) targets <- targets |> filter(Site == 50)
 
 # per reservoir x variable: how many observations, over what window, at what depths
 target_avail <- targets |>
@@ -324,8 +292,9 @@ print(chem_summary |> select(site, flare_variable, vera_variable, in_flare,
                              n_depths, n_obs, first_obs, last_obs, usable), n = Inf)
 
 # the punchline, per reservoir
-fcre_usable <- chem_summary |> filter(site == "fcre", usable) |> pull(vera_variable) |> unique()
-bvre_usable <- chem_summary |> filter(site == "bvre", usable) |> pull(vera_variable) |> unique()
+usable_at <- function(s) chem_summary |> filter(site == s, usable) |> pull(vera_variable) |> unique()
+fcre_usable <- usable_at("fcre")
+bvre_usable <- usable_at("bvre")
 
 message("usable chem at fcre (Falling Creek, site 50): ", paste(fcre_usable, collapse = ", "))
 message("usable chem at bvre (Beaverdam, site 50): ",     paste(bvre_usable, collapse = ", "))
@@ -347,39 +316,32 @@ write_csv(chem_summary,   file.path(out_dir, "flare_chem_vs_targets.csv"))
 # is from "helpful files/exploring_chem.R" lines 219-221.
 # n_members = 150 matches "helpful files/exploring_chem.R" line 37.
 # no Site filter needed - a FLARE run is the site-50 water column by construction.
+#
+# use_reforecast only ever does anything at fcre. that means it makes the fcre
+# record longer than the bvre one - for a fcre vs bvre comparison either set it
+# FALSE or trim both to the common window afterwards.
 pull_chem <- function(variable_name, site = "fcre", start_date, end_date, horizon = 0,
                       depths = NULL, n_members = 150, use_reforecast = TRUE){
 
-  # the operational run first
-  if(site == "fcre"){
-    main_bucket <- fcre_bucket
-  } else {
-    main_bucket <- bvre_bucket
-  }
-
-  forecasts <- arrow::open_dataset(main_bucket) |>
-    mutate(reference_datetime = as_date(reference_datetime)) |>
-    filter(variable == variable_name,
-           reference_datetime >= start_date,
-           reference_datetime <= end_date,
-           parameter <= n_members) |>
-    collect()
-
-  # fcre only: top up with the reforecast, but ONLY for reference dates the
-  # operational never had (fcre_reforecast_only_dates, section 2). that is what
-  # stops the 23 overlapping dates being pulled twice - on any date both runs
-  # issued, the operational forecast is the one that is kept.
-  if(site == "fcre" & use_reforecast){
-    reforecasts <- arrow::open_dataset(fcre_reforecast_bucket) |>
+  grab <- function(bucket, keep_ref_dates = NULL){
+    d <- open_dataset(bucket) |>
       mutate(reference_datetime = as_date(reference_datetime)) |>
       filter(variable == variable_name,
              reference_datetime >= start_date,
              reference_datetime <= end_date,
-             reference_datetime %in% fcre_reforecast_only_dates,
-             parameter <= n_members) |>
-      collect()
+             parameter <= n_members)
+    if(!is.null(keep_ref_dates)) d <- d |> filter(reference_datetime %in% keep_ref_dates)
+    collect(d)
+  }
 
-    forecasts <- bind_rows(forecasts, reforecasts)
+  forecasts <- grab(flare_bucket[[site]])
+
+  # fcre only: top up with the reforecast, but ONLY for reference dates the
+  # operational never had (reforecast_only_dates, section 2). that is what stops
+  # the 23 overlapping dates being pulled twice - on any date both runs issued,
+  # the operational forecast is the one that is kept.
+  if(site == "fcre" && use_reforecast){
+    forecasts <- bind_rows(forecasts, grab(reforecast_bucket, reforecast_only_dates))
   }
 
   out <- forecasts |>
@@ -398,9 +360,9 @@ pull_chem <- function(variable_name, site = "fcre", start_date, end_date, horizo
 }
 
 # hypolimnetic oxygen at Falling Creek site 50 (9 m):
-# oxy_9m_fcre <- pull_chem("DO_mgL_mean", "fcre", min(fcre_dates), max(fcre_dates), depths = 9)
+# oxy_9m_fcre <- pull_chem("DO_mgL_mean", "fcre", min(ref_dates$fcre), max(ref_dates$fcre), depths = 9)
 # and at Beaverdam - deeper hypolimnion, 13 m not 9 m:
-# oxy_13m_bvre <- pull_chem("DO_mgL_mean", "bvre", min(bvre_dates), max(bvre_dates), depths = 13)
+# oxy_13m_bvre <- pull_chem("DO_mgL_mean", "bvre", min(ref_dates$bvre), max(ref_dates$bvre), depths = 13)
 
 
 #### 10. quick look ####
