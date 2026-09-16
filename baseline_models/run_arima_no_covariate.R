@@ -284,4 +284,70 @@ arima_nc_flux <- purrr::pmap_dfr(site_var_combinations,
 # 
 # # combine and submit
 # combined_arima_nc <- bind_rows(arima_nc_inflow, arima_nc_insitu, arima_nc_met, arima_nc_flux, arima_nc_insitu_binary,arima_nc_insitu_productivity, arima_nc_insitu_chem, arima_nc_insitu_physical, arima_nc_insitu_metals,
-#                           
+#                                arima_nc_insitu_chla_max, arima_nc_insitu_deeper_fcr, arima_nc_insitu_deeper_bvr)
+## ADD BACK GHG -- BREAKING THINGS RIGHT NOW (arima_nc_ghg_insitu)
+
+# write forecast file
+# file_date <- combined_arima_nc$reference_datetime[1]
+# 
+# forecast_file <- paste0(paste("daily", file_date, team_name, sep = "-"), ".csv.gz")
+# 
+# write_csv(combined_arima_nc, forecast_file)
+
+### VARIABLES OF INTEREST, FORECAST AT SPECIFIC DEPTHS ####
+# Same variables and depths as the climatology, persistence and historic mean models, so
+# all four baselines can be compared like for like: a surface and a hypolimnetic depth at
+# each site, BVR 0.1 / 6 m and FCR 0.1 / 9 m.
+print('Variables of interest, by depth')
+
+interested_vars <- c('SRP_ugL_sample',
+                     'NO3NO2_ugL_sample',
+                     'NH4_ugL_sample',
+                     'DOC_mgL_sample',
+                     'CH4_umolL_sample',
+                     'CO2_umolL_sample')
+
+# NOTE: BVR grab samples are taken at 0.1 / 3 / 6 / 9 m -- there is no chem/GHG data at
+# 1.5 m (that is the sensor depth), so 3 m is the option if a mid-depth is ever wanted.
+interested_site_depths <- dplyr::bind_rows(
+  tidyr::expand_grid(site = 'bvre', depth = c(0.1, 6)),
+  tidyr::expand_grid(site = 'fcre', depth = c(0.1, 9)))
+
+# one row per site/depth/variable -> one call per combination, so each depth gets its own
+# ARIMA fit
+site_var_depth_interested <- tidyr::expand_grid(var = interested_vars,
+                                                interested_site_depths)
+
+interested_arima_nc <- purrr::pmap_dfr(site_var_depth_interested,
+                                       .f = ~ generate_baseline_arima_no_covariate(targets = targets_insitu_raw,
+                                                                                   h = 35,
+                                                                                   model_id = team_name,
+                                                                                   forecast_date = Sys.Date(),
+                                                                                   ...))
+
+# which site/depth/variable combinations actually produced a forecast?
+# (ARIMA can fail to fit where the others succeed -- anything missing here failed)
+interested_arima_nc |>
+  dplyr::distinct(site_id, variable, depth_m) |>
+  dplyr::arrange(site_id, variable, depth_m) |>
+  print(n = Inf)
+
+###plot####
+interested_arima_nc %>%
+  filter(family == 'normal') |>
+  pivot_wider(names_from = parameter, values_from = prediction) |>
+  mutate(depth_m = as_factor(depth_m)) |>
+  ggplot(aes(x = datetime, y = mu, colour = depth_m, fill = depth_m, group = depth_m)) +
+  geom_ribbon(aes(ymax = mu+sigma, ymin = mu-sigma), alpha = 0.2, colour = NA) +
+  geom_line() +
+  facet_grid(variable~site_id, scales = 'free') +
+  labs(colour = 'Depth (m)', fill = 'Depth (m)') +
+  # shrink the variable strip labels on the right so the long names stay readable
+  theme(strip.text.y = element_text(size = 6),
+        strip.text.x = element_text(size = 9))
+
+# vera4castHelpers::submit(forecast_file = forecast_file,
+#                          ask = FALSE,
+#                          first_submission = FALSE)
+
+unlink(forecast_file)
