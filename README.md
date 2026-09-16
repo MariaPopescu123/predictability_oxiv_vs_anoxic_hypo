@@ -15,6 +15,8 @@ added:
   'CH4_umolL_sample','CO2_umolL_sample') at depths 0.1m & 6m for BVR and
   0.1m & 9m for FCR.
 
+2. persistence - same as above
+  something to note: this is just a random walk from the last grabbed sample. so for 
+  chemistry it's not since january 2025 because of the chemistry pipeline
 
 currently adding:
-2. persistence

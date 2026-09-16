@@ -301,7 +301,7 @@ file_date <- combined_persistenceRW$reference_datetime[1]
 
 forecast_file <- paste0(paste("daily", file_date, team_name, sep = "-"), ".csv.gz")
 
-write_csv(combined_persistenceRW, forecast_file)
+#write_csv(combined_persistenceRW, forecast_file)
 
 ### VARIABLES OF INTEREST, FORECAST AT SPECIFIC DEPTHS ####
 # Same variables and depths as the climatology model (see baseline_models/climatology.R),
