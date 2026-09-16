@@ -9,28 +9,4 @@ To run baseline models go to "/baseline_models"
 Functions required for these are in "/R"
 
 added:
-1. climatology - includes climatology for all variables Austin had before, new chunk
-  at the bottom for just my variables of interest which include:
-  'SRP_ugL_sample', 'NO3NO2_ugL_sample', 'NH4_ugL_sample', 'DOC_mgL_sample',
-  'CH4_umolL_sample','CO2_umolL_sample') at depths 0.1m & 6m for BVR and
-  0.1m & 9m for FCR.
-
-2. persistence - same as above
-  something to note: this is just a random walk from the last grabbed sample. so for 
-  chemistry it's not since january 2025 because of the chemistry pipeline
-  
-3. historic mean
-
-4. ARIMA no covariate (NOT WORKING GREAT RN)
-
-
-currently adding:
-
-
-5. chronos2
-
-6. Prophet
-
-7. ETS
-
-8. FLARE
+1. climatology

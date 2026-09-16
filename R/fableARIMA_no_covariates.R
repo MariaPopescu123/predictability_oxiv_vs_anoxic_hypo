@@ -116,14 +116,4 @@ generate_baseline_arima_no_covariate <- function(targets,
         mutate(model_id = model_id,
                family = 'normal',
                reference_datetime=forecast_date) |>
-        select(all_of(c("model_id", "datetime", "reference_datetime","site_id", "variable", "family",
-                        "parameter", "prediction", "project_id", "duration", "depth_m" ))) |>
-        select(-any_of('.model')) |>
-        filter(datetime > reference_datetime) |>
-        ungroup() |>
-        as_tibble()
-      return(forecast)
-    }
-    
-  }
-}
+        select(all_of(c("model_id", "datetime", "refer
