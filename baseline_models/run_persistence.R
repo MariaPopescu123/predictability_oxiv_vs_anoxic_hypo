@@ -23,8 +23,14 @@ targets_met <- readr::read_csv(paste0("https://", "amnh1.osn.mghpcc.org", "/", "
 targets_tubr <- readr::read_csv(paste0("https://", "amnh1.osn.mghpcc.org", "/", "bio230121-bucket01/vera4cast/targets", "/project_id=vera4cast/duration=P1D/daily-inflow-targets.csv.gz"), guess_max = 10000, show_col_types = FALSE)
 
 
+# Keep a pristine copy of the insitu targets. Later in the script targets_insitu gets
+# mutated (BVR chem depths are all recoded to 1.5 m), which destroys the real depth
+# structure -- the depth-resolved forecasts below must be built from this untouched copy.
+targets_insitu_raw <- targets_insitu
+
 # Get site information
-sites <- readr::read_csv(config$catalog_config$site_metadata_url, show_col_types = FALSE)
+sites <- readr::read_csv('https://raw.githubusercontent.com/LTREB-reservoirs/vera4cast/main/vera4cast_field_site_metadata.csv',
+                         show_col_types = FALSE)
 site_names <- sites$site_id
 
 # Runs the RW forecast for inflow variables
@@ -296,6 +302,57 @@ file_date <- combined_persistenceRW$reference_datetime[1]
 forecast_file <- paste0(paste("daily", file_date, team_name, sep = "-"), ".csv.gz")
 
 write_csv(combined_persistenceRW, forecast_file)
+
+### VARIABLES OF INTEREST, FORECAST AT SPECIFIC DEPTHS ####
+# Same variables and depths as the climatology model (see baseline_models/climatology.R),
+# so the two baselines can be compared like for like: a surface and a hypolimnetic depth
+# at each site, BVR 0.1 / 6 m and FCR 0.1 / 9 m.
+print('Variables of interest, by depth')
+
+interested_vars <- c('SRP_ugL_sample',
+                     'NO3NO2_ugL_sample',
+                     'NH4_ugL_sample',
+                     'DOC_mgL_sample',
+                     'CH4_umolL_sample',
+                     'CO2_umolL_sample')
+
+# NOTE: BVR grab samples are taken at 0.1 / 3 / 6 / 9 m -- there is no chem/GHG data at
+# 1.5 m (that is the sensor depth), so 3 m is the option if a mid-depth is ever wanted.
+interested_site_depths <- dplyr::bind_rows(
+  tidyr::expand_grid(site = 'bvre', depth = c(0.1, 6)),
+  tidyr::expand_grid(site = 'fcre', depth = c(0.1, 9)))
+
+# one row per site/depth/variable -> one call per combination, so each depth is modelled
+# as its own random walk
+site_var_depth_interested <- tidyr::expand_grid(var = interested_vars,
+                                                interested_site_depths)
+
+interested_persistenceRW <- purrr::pmap_dfr(site_var_depth_interested,
+                                            .f = ~ generate_baseline_persistenceRW(targets = targets_insitu_raw,
+                                                                                   h = 35,
+                                                                                   model_id = team_name,
+                                                                                   forecast_date = Sys.Date(),
+                                                                                   ...))
+
+# which site/depth/variable combinations actually produced a forecast?
+interested_persistenceRW |>
+  dplyr::distinct(site_id, variable, depth_m) |>
+  dplyr::arrange(site_id, variable, depth_m) |>
+  print(n = Inf)
+
+###plot####
+interested_persistenceRW %>%
+  filter(family == 'normal') |>
+  pivot_wider(names_from = parameter, values_from = prediction) |>
+  mutate(depth_m = as_factor(depth_m)) |>
+  ggplot(aes(x = datetime, y = mu, colour = depth_m, fill = depth_m, group = depth_m)) +
+  geom_ribbon(aes(ymax = mu+sigma, ymin = mu-sigma), alpha = 0.2, colour = NA) +
+  geom_line() +
+  facet_grid(variable~site_id, scales = 'free') +
+  labs(colour = 'Depth (m)', fill = 'Depth (m)') +
+  # shrink the variable strip labels on the right so the long names stay readable
+  theme(strip.text.y = element_text(size = 6),
+        strip.text.x = element_text(size = 9))
 
 # combined_persistenceRW %>%
 #   filter(family == 'normal') |>
