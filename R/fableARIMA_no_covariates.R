@@ -38,8 +38,12 @@ generate_baseline_arima_no_covariate <- function(targets,
   
   
   # Work out when the forecast should start
+  # NOTE: must filter on depth too. Without it the start date comes from the most recent
+  # observation at ANY depth, so a depth that was last sampled earlier gets padded with
+  # trailing NAs by fill_gaps() and the fit runs past the end of the real series.
   forecast_starts <- targets %>%
-    dplyr::filter(!is.na(observation) & site_id == site & variable == var & datetime < forecast_date) %>%
+    dplyr::filter(!is.na(observation) & site_id == site & variable == var &
+                    depth_m %in% target_depths & datetime < forecast_date) %>%
     # Start the day after the most recent non-NA value
     dplyr::summarise(start_date = as_date(max(datetime)) + lubridate::days(1)) %>% # Date
     dplyr::mutate(h = (forecast_date - start_date) + h) %>% # Horizon value

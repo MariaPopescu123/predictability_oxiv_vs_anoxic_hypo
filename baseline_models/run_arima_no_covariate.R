@@ -1,4 +1,4 @@
-print(paste0("Running persistence at ", Sys.time()))
+print(paste0("Running ARIMA at ", Sys.time()))
 
 library(tidyverse)
 library(lubridate)
@@ -11,20 +11,25 @@ Sys.unsetenv("AWS_DEFAULT_REGION")
 Sys.unsetenv("AWS_S3_ENDPOINT")
 Sys.setenv("AWS_EC2_METADATA_DISABLED"="TRUE")
 
-config <- yaml::read_yaml("challenge_configuration.yaml")
+#config <- yaml::read_yaml("challenge_configuration.yaml") Maria hardcoded in from yaml (see climatology)
 team_name <- 'arima_no_covariate'
 
 source('R/fableARIMA_no_covariates.R')
 source('R/convert2binary.R')
 
 # Read in targets
-targets_insitu <- readr::read_csv(paste0("https://", config$endpoint, "/", config$targets_bucket, "/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"), guess_max = 10000)
-targets_met <- readr::read_csv(paste0("https://", config$endpoint, "/", config$targets_bucket, "/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"), guess_max = 10000, show_col_types = FALSE)
-targets_tubr <- readr::read_csv(paste0("https://", config$endpoint, "/", config$targets_bucket, "/project_id=vera4cast/duration=P1D/daily-inflow-targets.csv.gz"), guess_max = 10000, show_col_types = FALSE)
+targets_insitu <- readr::read_csv(paste0("https://", "amnh1.osn.mghpcc.org", "/", "bio230121-bucket01/vera4cast/targets", "/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"), guess_max = 10000)
+targets_met <- readr::read_csv(paste0("https://", "amnh1.osn.mghpcc.org", "/", "bio230121-bucket01/vera4cast/targets", "/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"), guess_max = 10000, show_col_types = FALSE)
+targets_tubr <- readr::read_csv(paste0("https://", "amnh1.osn.mghpcc.org", "/", "bio230121-bucket01/vera4cast/targets", "/project_id=vera4cast/duration=P1D/daily-inflow-targets.csv.gz"), guess_max = 10000, show_col_types = FALSE)
 
+# Keep a pristine copy of the insitu targets. Later in the script targets_insitu gets
+# mutated (BVR chem depths are all recoded to 1.5 m), which destroys the real depth
+# structure -- the depth-resolved forecasts below must be built from this untouched copy.
+targets_insitu_raw <- targets_insitu
 
 # Get site information
-sites <- readr::read_csv(config$catalog_config$site_metadata_url, show_col_types = FALSE)
+sites <- readr::read_csv('https://raw.githubusercontent.com/LTREB-reservoirs/vera4cast/main/vera4cast_field_site_metadata.csv',
+                         show_col_types = FALSE)
 site_names <- sites$site_id
 
 # Runs the ARIMA forecast for inflow variables
@@ -265,32 +270,84 @@ arima_nc_flux <- purrr::pmap_dfr(site_var_combinations,
                                                                              depth = 'target',
                                                                              ...))
 
-# Generate binary forecasts from continuous
-binary_site_var_comb <- data.frame(site = c('fcre', 'bvre'),
-                                   depth = c(1.6, 1.5))
-
-arima_nc_insitu_binary <- purrr::pmap_dfr(binary_site_var_comb,
-                                          .f = ~convert_continuous_binary(continuous_var = 'Chla_ugL_mean',
-                                                                          binary_var = 'Bloom_binary_mean',
-                                                                          forecast = arima_nc_insitu,
-                                                                          targets = targets_insitu,
-                                                                          threshold = 20,
-                                                                          ...))
-
-# combine and submit
-combined_arima_nc <- bind_rows(arima_nc_inflow, arima_nc_insitu, arima_nc_met, arima_nc_flux, arima_nc_insitu_binary,arima_nc_insitu_productivity, arima_nc_insitu_chem, arima_nc_insitu_physical, arima_nc_insitu_metals,
-                               arima_nc_insitu_chla_max, arima_nc_insitu_deeper_fcr, arima_nc_insitu_deeper_bvr)
+# # Generate binary forecasts from continuous
+# binary_site_var_comb <- data.frame(site = c('fcre', 'bvre'),
+#                                    depth = c(1.6, 1.5))
+# 
+# arima_nc_insitu_binary <- purrr::pmap_dfr(binary_site_var_comb,
+#                                           .f = ~convert_continuous_binary(continuous_var = 'Chla_ugL_mean',
+#                                                                           binary_var = 'Bloom_binary_mean',
+#                                                                           forecast = arima_nc_insitu,
+#                                                                           targets = targets_insitu,
+#                                                                           threshold = 20,
+#                                                                           ...))
+# 
+# # combine and submit
+# combined_arima_nc <- bind_rows(arima_nc_inflow, arima_nc_insitu, arima_nc_met, arima_nc_flux, arima_nc_insitu_binary,arima_nc_insitu_productivity, arima_nc_insitu_chem, arima_nc_insitu_physical, arima_nc_insitu_metals,
+#                                arima_nc_insitu_chla_max, arima_nc_insitu_deeper_fcr, arima_nc_insitu_deeper_bvr)
 ## ADD BACK GHG -- BREAKING THINGS RIGHT NOW (arima_nc_ghg_insitu)
 
 # write forecast file
-file_date <- combined_arima_nc$reference_datetime[1]
+# file_date <- combined_arima_nc$reference_datetime[1]
+# 
+# forecast_file <- paste0(paste("daily", file_date, team_name, sep = "-"), ".csv.gz")
+# 
+# write_csv(combined_arima_nc, forecast_file)
 
-forecast_file <- paste0(paste("daily", file_date, team_name, sep = "-"), ".csv.gz")
+### VARIABLES OF INTEREST, FORECAST AT SPECIFIC DEPTHS ####
+# Same variables and depths as the climatology, persistence and historic mean models, so
+# all four baselines can be compared like for like: a surface and a hypolimnetic depth at
+# each site, BVR 0.1 / 6 m and FCR 0.1 / 9 m.
+print('Variables of interest, by depth')
 
-write_csv(combined_arima_nc, forecast_file)
+interested_vars <- c('SRP_ugL_sample',
+                     'NO3NO2_ugL_sample',
+                     'NH4_ugL_sample',
+                     'DOC_mgL_sample',
+                     'CH4_umolL_sample',
+                     'CO2_umolL_sample')
 
-vera4castHelpers::submit(forecast_file = forecast_file,
-                         ask = FALSE,
-                         first_submission = FALSE)
+# NOTE: BVR grab samples are taken at 0.1 / 3 / 6 / 9 m -- there is no chem/GHG data at
+# 1.5 m (that is the sensor depth), so 3 m is the option if a mid-depth is ever wanted.
+interested_site_depths <- dplyr::bind_rows(
+  tidyr::expand_grid(site = 'bvre', depth = c(0.1, 6)),
+  tidyr::expand_grid(site = 'fcre', depth = c(0.1, 9)))
+
+# one row per site/depth/variable -> one call per combination, so each depth gets its own
+# ARIMA fit
+site_var_depth_interested <- tidyr::expand_grid(var = interested_vars,
+                                                interested_site_depths)
+
+interested_arima_nc <- purrr::pmap_dfr(site_var_depth_interested,
+                                       .f = ~ generate_baseline_arima_no_covariate(targets = targets_insitu_raw,
+                                                                                   h = 35,
+                                                                                   model_id = team_name,
+                                                                                   forecast_date = Sys.Date(),
+                                                                                   ...))
+
+# which site/depth/variable combinations actually produced a forecast?
+# (ARIMA can fail to fit where the others succeed -- anything missing here failed)
+interested_arima_nc |>
+  dplyr::distinct(site_id, variable, depth_m) |>
+  dplyr::arrange(site_id, variable, depth_m) |>
+  print(n = Inf)
+
+###plot####
+interested_arima_nc %>%
+  filter(family == 'normal') |>
+  pivot_wider(names_from = parameter, values_from = prediction) |>
+  mutate(depth_m = as_factor(depth_m)) |>
+  ggplot(aes(x = datetime, y = mu, colour = depth_m, fill = depth_m, group = depth_m)) +
+  geom_ribbon(aes(ymax = mu+sigma, ymin = mu-sigma), alpha = 0.2, colour = NA) +
+  geom_line() +
+  facet_grid(variable~site_id, scales = 'free') +
+  labs(colour = 'Depth (m)', fill = 'Depth (m)') +
+  # shrink the variable strip labels on the right so the long names stay readable
+  theme(strip.text.y = element_text(size = 6),
+        strip.text.x = element_text(size = 9))
+
+# vera4castHelpers::submit(forecast_file = forecast_file,
+#                          ask = FALSE,
+#                          first_submission = FALSE)
 
 unlink(forecast_file)

@@ -18,5 +18,19 @@ added:
 2. persistence - same as above
   something to note: this is just a random walk from the last grabbed sample. so for 
   chemistry it's not since january 2025 because of the chemistry pipeline
+  
+3. historic mean
+
+4. ARIMA no covariate (NOT WORKING GREAT RN)
+
 
 currently adding:
+
+
+5. chronos2
+
+6. Prophet
+
+7. ETS
+
+8. FLARE
